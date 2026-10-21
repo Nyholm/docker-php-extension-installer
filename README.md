@@ -220,7 +220,7 @@ PIE is used only when all these conditions are met:
 - the extension is not installed from its source code
 - the extension is not a bundled extension
 - the requested version, if any, is not a pre-release stability selector (like `xdebug-beta` or `xdebug-^3@beta`)
-- the requested version, if any, is not a partial numeric version (like `xdebug-3.4`; use `xdebug-3.4.0` for the exact release)
+- the requested version, if any, is not a partial numeric version (like `xdebug-3.4`; use `xdebug-3.5.0` for the exact release)
 
 All the other extensions use the standard installer, so you can mix them in the same command. If PIE is applicable but fails to install an extension, the script stops. Set `IPE_ALLOW_PIE_FALLBACK=1` to fall back to the standard installer.
 
@@ -516,7 +516,7 @@ Here's the list of all the supported environment variables:
 | | `IPE_NOSTRIP=1` | By setting this environment variable, compiled PHP extensions will retain their debug symbols (useful for debugging of crashes like segmentation faults) |
 | | `IPE_USE_PIE=1` | Use [PIE](https://github.com/php/pie) instead of PECL for the extensions that have a PIE package (requires PHP 8.1 or newer). Extensions without a PIE package use the standard installer. If PIE is applicable but fails, the script stops |
 | | `IPE_ALLOW_PIE_FALLBACK=1` | Allow falling back to the standard installer when PIE cannot be downloaded or a PIE package fails to install |
-| | `IPE_PIE_VERSION=1.5.2` | The version of PIE to download when `IPE_USE_PIE=1` is used |
+| | `IPE_PIE_VERSION=1.5.2` | The version of PIE to download when PIE is used (`IPE_USE_PIE=1`, `IPE_REQUIRE_PIE=1`, or a `vendor/package` argument) |
 | | `IPE_PIE_SHA256` | The expected SHA-256 of the PIE phar. It defaults to the hash of the pinned version. Set it when overriding `IPE_PIE_VERSION` |
 | | `IPE_REQUIRE_PIE=1` | Require PIE. The script fails when an extension that is not bundled cannot be installed with PIE, instead of using the standard installer. Implies `IPE_USE_PIE=1` |
 | | `IPE_KEEP_SYSPKG_CACHE=1` | By default the script will clear the apt/apk/pear cache in order to save disk space. You can disable it by setting this environment variable |

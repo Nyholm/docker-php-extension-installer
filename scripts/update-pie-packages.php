@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /*
- * Update the generated PIE package block in install-php-extensions.
+ * Update the generated PIE blocks in install-php-extensions.
  *
  * Usage:
  *   php scripts/update-pie-packages.php
  *   php scripts/update-pie-packages.php --check
  *
- * The --check mode exits with a non-zero code if install-php-extensions doesn't contain the generated block.
+ * The --check mode exits with a non-zero code if the generated blocks are out of date.
  */
 
 const ROOT_DIR = __DIR__ . '/..';
@@ -20,12 +20,16 @@ const SUPPORTED_EXTENSIONS_PATH = ROOT_DIR . '/data/supported-extensions';
 
 const INSTALLER_PATH = ROOT_DIR . '/install-php-extensions';
 
-const START_MARKER = "\t\t# START OF PIE PACKAGES (generated from data/pie-packages)";
+const START_PACKAGES_MARKER = "\t\t# START OF PIE PACKAGES (generated from data/pie-packages)";
 
-const END_MARKER = "\t\t# END OF PIE PACKAGES (generated from data/pie-packages)";
+const END_PACKAGES_MARKER = "\t\t# END OF PIE PACKAGES (generated from data/pie-packages)";
+
+const START_MIN_PHP_MARKER = "\t\t# START OF PIE MINIMUM PHP VERSIONS (generated from data/pie-packages)";
+
+const END_MIN_PHP_MARKER = "\t\t\t# END OF PIE MINIMUM PHP VERSIONS (generated from data/pie-packages)";
 
 /**
- * @return array<string, string> extension name => PIE package name
+ * @return array<string, array{minimumPhpVersion: string, package: string}> extension name => PIE package
  */
 function readPiePackages(): array
 {
@@ -70,7 +74,10 @@ function readPiePackages(): array
         if (isset($packages[$package])) {
             throw new RuntimeException('Duplicated PIE package in ' . PIE_PACKAGES_PATH . ': ' . $package);
         }
-        $result[$extension] = $package;
+        $result[$extension] = [
+            'minimumPhpVersion' => $minimumPhpVersion,
+            'package' => $package,
+        ];
         $packages[$package] = true;
     }
     if ($result === []) {
@@ -82,33 +89,54 @@ function readPiePackages(): array
 }
 
 /**
- * @param array<string, string> $packages
+ * @param array<string, array{minimumPhpVersion: string, package: string}> $packages
  */
-function generateBlock(array $packages): string
+function generatePackagesBlock(array $packages): string
 {
     $lines = [];
-    foreach ($packages as $extension => $package) {
+    foreach ($packages as $extension => $row) {
         $lines[] = "\t\t{$extension})";
-        $lines[] = "\t\t\tprintf '%s' '{$package}'";
+        $lines[] = "\t\t\tprintf '%s' '{$row['package']}'";
         $lines[] = "\t\t\t;;";
     }
 
     return implode("\n", $lines);
 }
 
-function replaceBlock(string $installer, string $block): string
+/**
+ * @param array<string, array{minimumPhpVersion: string, package: string}> $packages
+ */
+function generateMinimumPhpBlock(array $packages): string
 {
-    $start = strpos($installer, START_MARKER);
-    if ($start === false) {
-        throw new RuntimeException('Unable to find the PIE packages start marker in ' . INSTALLER_PATH);
+    $lines = [];
+    foreach ($packages as $extension => $row) {
+        if (version_compare($row['minimumPhpVersion'], '8.1', '<=')) {
+            continue;
+        }
+        [$major, $minor] = array_map('intval', explode('.', $row['minimumPhpVersion']));
+        $lines[] = "\t\t{$extension})";
+        $lines[] = "\t\t\tif test \$PHP_MAJMIN_VERSION -lt " . ($major * 100 + $minor) . '; then';
+        $lines[] = "\t\t\t\treturn 1";
+        $lines[] = "\t\t\tfi";
+        $lines[] = "\t\t\t;;";
     }
-    $end = strpos($installer, END_MARKER, $start);
+
+    return implode("\n", $lines);
+}
+
+function replaceBlock(string $installer, string $startMarker, string $endMarker, string $block, string $name): string
+{
+    $start = strpos($installer, $startMarker);
+    if ($start === false) {
+        throw new RuntimeException("Unable to find the {$name} start marker in " . INSTALLER_PATH);
+    }
+    $end = strpos($installer, $endMarker, $start);
     if ($end === false) {
-        throw new RuntimeException('Unable to find the PIE packages end marker in ' . INSTALLER_PATH);
+        throw new RuntimeException("Unable to find the {$name} end marker in " . INSTALLER_PATH);
     }
     $prefix = substr($installer, 0, $start);
 
-    return $prefix . START_MARKER . "\n" . $block . "\n" . substr($installer, $end);
+    return $prefix . $startMarker . "\n" . $block . "\n" . substr($installer, $end);
 }
 
 function main(): int
@@ -119,10 +147,11 @@ function main(): int
         if ($installer === false) {
             throw new RuntimeException('Failed to read ' . INSTALLER_PATH);
         }
-        $updated = replaceBlock($installer, generateBlock($packages));
+        $updated = replaceBlock($installer, START_PACKAGES_MARKER, END_PACKAGES_MARKER, generatePackagesBlock($packages), 'PIE packages');
+        $updated = replaceBlock($updated, START_MIN_PHP_MARKER, END_MIN_PHP_MARKER, generateMinimumPhpBlock($packages), 'PIE minimum PHP versions');
         if (in_array('--check', $_SERVER['argv'] ?? [], true)) {
             if ($updated !== $installer) {
-                fwrite(STDERR, "The generated PIE packages block in install-php-extensions is out of date.\nRun: php scripts/update-pie-packages.php\n");
+                fwrite(STDERR, "The generated PIE blocks in install-php-extensions are out of date.\nRun: php scripts/update-pie-packages.php\n");
 
                 return 1;
             }

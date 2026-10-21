@@ -252,10 +252,6 @@ getPeclModuleName() {
 #   The PIE package name (nothing if the extension can't be installed using PIE)
 getPiePackageName() {
 	case "$1" in
-		*/*)
-			printf '%s' "${1%%:*}"
-			return 0
-			;;
 		# START OF PIE PACKAGES (generated from data/pie-packages)
 		apcu)
 			printf '%s' 'apcu/apcu'
@@ -5821,6 +5817,17 @@ installRemoteModule() {
 				return
 			fi
 		else
+			if test $PIE_ENABLED -eq 1; then
+				if pieIsRequired; then
+					printf 'PIE is required but cannot be used for %s\n' "$installRemoteModule_module" >&2
+					exit 1
+				fi
+				printf 'PIE is not used for %s, using the standard installer\n' "$installRemoteModule_module" >&2
+			fi
+			if test $USE_PECL -eq 0; then
+				configurePecl
+				USE_PECL=1
+			fi
 			installPeclPackage "$installRemoteModule_module" "$installRemoteModule_version" "$installRemoteModule_cppflags" "$installRemoteModule_path"
 		fi
 	fi
@@ -5890,10 +5897,37 @@ moduleMayUsePie() {
 		return 1
 	fi
 	case "$1" in
+		# START OF PIE MINIMUM PHP VERSIONS (generated from data/pie-packages)
 		ds)
-			# PIE packages for ds require PHP 8.2 or newer
 			if test $PHP_MAJMIN_VERSION -lt 802; then
 				return 1
+			fi
+			;;
+			# END OF PIE MINIMUM PHP VERSIONS (generated from data/pie-packages)
+	esac
+	case "$1" in
+		excimer)
+			if test "$DISTRO" = alpine && test $DISTRO_MAJMIN_VERSION -le 313; then
+				return 1
+			fi
+			;;
+		rdkafka)
+			case "$DISTRO" in
+				alpine)
+					moduleMayUsePie_librdkafkaPackage='librdkafka'
+					;;
+				debian)
+					moduleMayUsePie_librdkafkaPackage='librdkafka*'
+					;;
+				*)
+					moduleMayUsePie_librdkafkaPackage=''
+					;;
+			esac
+			if test -n "$moduleMayUsePie_librdkafkaPackage"; then
+				moduleMayUsePie_librdkafkaVersion="$(getInstalledPackageVersion "$moduleMayUsePie_librdkafkaPackage")"
+				if test -n "$moduleMayUsePie_librdkafkaVersion" && test $(compareVersions "$moduleMayUsePie_librdkafkaVersion" '0.11.0') -lt 0; then
+					return 1
+				fi
 			fi
 			;;
 	esac
@@ -6054,21 +6088,6 @@ configureInstaller() {
 			if ! moduleMayUsePie "$configureInstaller_module"; then
 				printf 'PIE is required but cannot be used for %s\n' "$configureInstaller_module" >&2
 				exit 1
-			fi
-		done
-	fi
-	if test $PIE_REQUESTED -eq 1 && test $PIE_ENABLED -eq 1; then
-		for configureInstaller_module in $PHP_MODULES_TO_INSTALL; do
-			case "$configureInstaller_module" in
-				@composer | @fix_letsencrypt)
-					continue
-					;;
-			esac
-			if stringInList "$configureInstaller_module" "$BUNDLED_MODULES" && ! stringInList "$configureInstaller_module" "$FORCED_REMOTE_MODULES"; then
-				continue
-			fi
-			if ! moduleMayUsePie "$configureInstaller_module"; then
-				printf 'PIE is not used for %s, using the standard installer\n' "$configureInstaller_module" >&2
 			fi
 		done
 	fi

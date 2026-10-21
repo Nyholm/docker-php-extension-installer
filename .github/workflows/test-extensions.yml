@@ -268,7 +268,7 @@ jobs:
         run: ./scripts/ci-test-extensions pie
 
   test_pie_php81:
-    name: Test PIE fallback on PHP 8.1
+    name: Test ds on PHP 8.1 with PECL
     needs:
       - check_syntax_data
       - check_syntax_shell
