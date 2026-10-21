@@ -502,7 +502,9 @@ processPHPModuleArgument() {
 			exit 1
 		fi
 	elif isPiePackageArgument "$processPHPModuleArgument_arg"; then
-		PROCESSED_PHP_MODULE_ARGUMENT="$(printf '%s' "$processPHPModuleArgument_arg" | tr '[:upper:]' '[:lower:]')"
+		processPHPModuleArgument_package="${processPHPModuleArgument_arg%%:*}"
+		processPHPModuleArgument_constraint="${processPHPModuleArgument_arg#"$processPHPModuleArgument_package"}"
+		PROCESSED_PHP_MODULE_ARGUMENT="$(printf '%s' "$processPHPModuleArgument_package" | tr '[:upper:]' '[:lower:]')$processPHPModuleArgument_constraint"
 		processPHPModuleArgument_version=''
 	else
 		PROCESSED_PHP_MODULE_ARGUMENT="${processPHPModuleArgument_arg%%-*}"

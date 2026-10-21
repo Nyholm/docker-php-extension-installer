@@ -220,6 +220,7 @@ PIE is used only when all these conditions are met:
 - the extension is not installed from its source code
 - the extension is not a bundled extension
 - the requested version, if any, is not a pre-release stability selector (like `xdebug-beta` or `xdebug-^3@beta`)
+- the requested version, if any, is not a partial numeric version (like `xdebug-3.4`; use `xdebug-3.4.0` for the exact release)
 
 All the other extensions use the standard installer, so you can mix them in the same command. If PIE is applicable but fails to install an extension, the script stops. Set `IPE_ALLOW_PIE_FALLBACK=1` to fall back to the standard installer.
 
@@ -229,7 +230,7 @@ You can also pass a PIE package name directly, for example:
 install-php-extensions nikic/php-ast
 ```
 
-An argument containing a slash is treated as a PIE package name. You can add a PIE version constraint after a colon, for example `nikic/php-ast:^1.1`. The package form requires PHP 8.1 or newer. PIE installs and enables the package and handles its system dependencies. The script stops if the package cannot be installed. `IPE_ALLOW_PIE_FALLBACK` does not apply to the package form. The installer's configure options and dependency handling apply only to the extension names supported by this script. The `IPE_SAVE_PERMDEPS_TO` and `IPE_SAVE_VOLDEPS_TO` lists do not include packages installed by PIE for a package argument. The existing `vendor/repository@ref` form is still a GitHub source install, so use the colon form for a PIE package version.
+An argument in the `vendor/package` form is treated as a PIE package name. URLs and local paths keep their existing meaning. You can add a PIE version constraint after a colon, for example `nikic/php-ast:^1.1`. The package form requires PHP 8.1 or newer. PIE installs and enables the package and handles its system dependencies. The script stops if the package cannot be installed. `IPE_ALLOW_PIE_FALLBACK` does not apply to the package form. The installer's configure options and dependency handling apply only to the extension names supported by this script. The `IPE_SAVE_PERMDEPS_TO` and `IPE_SAVE_VOLDEPS_TO` lists do not include packages installed by PIE for a package argument. The existing `vendor/repository@ref` form is still a GitHub source install, so use the colon form for a PIE package version.
 
 Set `IPE_REQUIRE_PIE=1` to require PIE. In this mode the script fails when an extension that is not bundled cannot be installed with PIE. It implies `IPE_USE_PIE=1`.
 
