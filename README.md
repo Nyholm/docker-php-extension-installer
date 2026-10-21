@@ -219,10 +219,11 @@ PIE is used only when all these conditions are met:
 - the extension has a PIE package supported by this script
 - the extension is not installed from its source code
 - the extension is not a bundled extension
+- the requested version, if any, is not a pre-release stability selector (like `xdebug-beta` or `xdebug-^3@beta`)
 
-All the other extensions use the standard installer, so you can mix them in the same command. If PIE fails to install an extension, the script falls back to PECL.
+All the other extensions use the standard installer, so you can mix them in the same command. If PIE fails to install an extension, the script falls back to the standard installer.
 
-PIE installs extensions with the default configure options of their package, so some optional features may not be enabled.
+PIE receives the configure options that the extension package declares. Options that the package does not declare are skipped.
 
 ## Installing composer
 

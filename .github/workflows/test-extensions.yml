@@ -212,7 +212,7 @@ jobs:
             --env CI=true \
             --env IPE_USE_PIE=1 \
             "${{ matrix.container }}" \
-            sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions apcu xdebug && test ! -f /tmp/pecl-called && php ./scripts/check-installed-extension.php apcu xdebug'
+            sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions apcu xdebug redis && test ! -f /tmp/pecl-called && php ./scripts/check-installed-extension.php apcu xdebug redis && php --ri redis | grep -q "Available compression => lzf"'
       -
         name: Check a version constraint
         run: |
@@ -223,6 +223,17 @@ jobs:
             --env IPE_USE_PIE=1 \
             "${{ matrix.container }}" \
             sh -c './install-php-extensions "xdebug-^3@stable" && php -r '\''exit(version_compare(phpversion("xdebug"), "3.0.0", ">=") && version_compare(phpversion("xdebug"), "4.0.0", "<") ? 0 : 1);'\'''
+      -
+        name: Check an extension with many configure options
+        if: matrix.container == 'php:8.4-cli-bookworm'
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_USE_PIE=1 \
+            "${{ matrix.container }}" \
+            sh -c './install-php-extensions mongodb && php --ri mongodb | grep -q "libmongoc SASL => enabled" && php --ri mongodb | grep -q "libmongoc compression snappy => enabled"'
 
   test_pie_fallback:
     name: Test PIE fallback to PECL on ${{ matrix.container }}
