@@ -5849,6 +5849,22 @@ moduleMayUsePie() {
 			fi
 			;;
 	esac
+	moduleMayUsePie_version="$(getWantedPHPModuleVersion "$1")"
+	case "$moduleMayUsePie_version" in
+		'' | latest | stable | @stable | dev-* | ^*)
+			;;
+		*)
+			# Composer would treat 3.4 as exact 3.4.0, PECL treats it as an invalid version
+			moduleMayUsePie_version="${moduleMayUsePie_version%@*}"
+			case "$moduleMayUsePie_version" in
+				[0-9]*.[0-9]*.[0-9]*)
+					;;
+				[0-9]* | [0-9]*.[0-9]*)
+					return 1
+					;;
+			esac
+			;;
+	esac
 	case "$(getWantedPHPModuleVersion "$1")" in
 		alpha | beta | rc | devel | snapshot | preview | *@alpha | *@beta | *@rc | *@dev | *@devel | *@snapshot | *@preview)
 			return 1
@@ -5925,13 +5941,30 @@ configureInstaller() {
 	if pieIsRequired; then
 		PIE_REQUESTED=1
 	fi
+	PIE_REMOTE_MODULES=0
+	if test $PIE_REQUESTED -eq 1; then
+		for configureInstaller_module in $PHP_MODULES_TO_INSTALL; do
+			case "$configureInstaller_module" in
+				@composer | @fix_letsencrypt)
+					continue
+					;;
+			esac
+			if stringInList "$configureInstaller_module" "$BUNDLED_MODULES" && ! stringInList "$configureInstaller_module" "$FORCED_REMOTE_MODULES"; then
+				continue
+			fi
+			PIE_REMOTE_MODULES=1
+			break
+		done
+	fi
 	if test $PIE_REQUESTED -eq 1; then
 		if test $PHP_MAJMIN_VERSION -lt 801; then
-			if pieIsRequired; then
-				printf 'PIE is required but it needs PHP 8.1 or newer\n' >&2
-				exit 1
+			if test $PIE_REMOTE_MODULES -eq 1; then
+				if pieIsRequired; then
+					printf 'PIE is required but it needs PHP 8.1 or newer\n' >&2
+					exit 1
+				fi
+				printf 'PIE requires PHP 8.1 or newer, using PECL\n' >&2
 			fi
-			printf 'PIE requires PHP 8.1 or newer, using PECL\n' >&2
 		else
 			PIE_ENABLED=1
 		fi
