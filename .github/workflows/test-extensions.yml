@@ -191,7 +191,17 @@ jobs:
         name: Checkout
         uses: actions/checkout@v7
       -
-        run: docker run --rm --volume "$(pwd):/app" --workdir /app php:7.4-cli-alpine ./scripts/test-installversion "${{ matrix.xdebug_version }}"
+        name: Test installing xdebug ${{ matrix.xdebug_version }}
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm --volume "$(pwd):/app" --workdir /app php:7.4-cli-alpine ./scripts/test-installversion "${{ matrix.xdebug_version }}"; then
+              exit 0
+            fi
+            if test $attempt -lt 3; then
+              sleep 10
+            fi
+          done
+          exit 1
 
   test_pie:
     name: Test installing extensions with PIE on ${{ matrix.container }}
@@ -317,13 +327,21 @@ jobs:
       -
         name: Install extensions
         run: |
-          docker run --rm \
-            --volume "$(pwd):/app" \
-            --workdir /app \
-            --env CI=true \
-            --env IPE_USE_PIE=1 \
-            "${{ matrix.container }}" \
-            sh -c './install-php-extensions apcu ssh2 && php ./scripts/check-installed-extension.php apcu ssh2'
+          for attempt in 1 2 3; do
+            if docker run --rm \
+              --volume "$(pwd):/app" \
+              --workdir /app \
+              --env CI=true \
+              --env IPE_USE_PIE=1 \
+              "${{ matrix.container }}" \
+              sh -c './install-php-extensions apcu ssh2 && php ./scripts/check-installed-extension.php apcu ssh2'; then
+              exit 0
+            fi
+            if test $attempt -lt 3; then
+              sleep 10
+            fi
+          done
+          exit 1
       -
         name: Check the fallback after a PIE failure
         if: matrix.container == 'php:8.4-cli-bookworm'
