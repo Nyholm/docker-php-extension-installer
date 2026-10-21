@@ -3,6 +3,9 @@ name: Test extensions
 on:
   - pull_request
 
+permissions:
+  contents: read
+
 jobs:
 
   check_syntax_data:
@@ -211,7 +214,6 @@ jobs:
             --workdir /app \
             --env CI=true \
             --env IPE_USE_PIE=1 \
-            --env COMPOSER_AUTH='{"github-oauth":{"github.com":"${{ github.token }}"}}' \
             "${{ matrix.container }}" \
             sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions apcu xdebug redis && test ! -f /tmp/pecl-called && php ./scripts/check-installed-extension.php apcu xdebug redis && php --ri redis | grep -q "Available compression => lzf"'
       -
@@ -222,7 +224,6 @@ jobs:
             --workdir /app \
             --env CI=true \
             --env IPE_USE_PIE=1 \
-            --env COMPOSER_AUTH='{"github-oauth":{"github.com":"${{ github.token }}"}}' \
             "${{ matrix.container }}" \
             sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions "xdebug-^3@stable" && test ! -f /tmp/pecl-called && php -r '\''exit(version_compare(phpversion("xdebug"), "3.0.0", ">=") && version_compare(phpversion("xdebug"), "4.0.0", "<") ? 0 : 1);'\'''
       -
@@ -236,7 +237,7 @@ jobs:
             --env IPE_USE_PIE=1 \
             --env COMPOSER_AUTH='{"github-oauth":{"github.com":"${{ github.token }}"}}' \
             "${{ matrix.container }}" \
-            sh -c './install-php-extensions mongodb && php --ri mongodb | grep -q "libmongoc SASL => enabled" && php --ri mongodb | grep -q "libmongoc compression snappy => enabled"'
+            sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions mongodb && test ! -f /tmp/pecl-called && php --ri mongodb | grep -q "libmongoc SASL => enabled" && php --ri mongodb | grep -q "libmongoc compression snappy => enabled"'
 
   test_pie_extensions:
     name: Test ${{ matrix.extension }} with PIE
@@ -259,7 +260,6 @@ jobs:
           - imagick
           - inotify
           - mailparse
-          - mongodb
           - msgpack
           - parallel
           - pcov
@@ -269,6 +269,37 @@ jobs:
           - uuid
           - xdebug
           - yaml
+    steps:
+      -
+        name: Docker pull
+        run: docker pull php:8.4-cli-bookworm
+      -
+        name: Checkout
+        uses: actions/checkout@v7
+      -
+        name: Install the extension
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_USE_PIE=1 \
+            "${{ matrix.extension == 'parallel' && 'php:8.4-zts-bookworm' || 'php:8.4-cli-bookworm' }}" \
+            sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions ${{ matrix.extension }} && test ! -f /tmp/pecl-called && php ./scripts/check-installed-extension.php ${{ matrix.extension }}'
+
+  test_pie_extensions_github:
+    name: Test ${{ matrix.extension }} with PIE and a GitHub token
+    needs:
+      - check_syntax_data
+      - check_syntax_shell
+      - check_issues_shell
+      - check_syntax_php
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extension:
+          - mongodb
           - zstd
     steps:
       -
@@ -286,7 +317,7 @@ jobs:
             --env CI=true \
             --env IPE_USE_PIE=1 \
             --env COMPOSER_AUTH='{"github-oauth":{"github.com":"${{ github.token }}"}}' \
-            "${{ matrix.extension == 'parallel' && 'php:8.4-zts-bookworm' || 'php:8.4-cli-bookworm' }}" \
+            php:8.4-cli-bookworm \
             sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions ${{ matrix.extension }} && test ! -f /tmp/pecl-called && php ./scripts/check-installed-extension.php ${{ matrix.extension }}'
 
   test_pie_php81:
@@ -312,7 +343,6 @@ jobs:
             --workdir /app \
             --env CI=true \
             --env IPE_USE_PIE=1 \
-            --env COMPOSER_AUTH='{"github-oauth":{"github.com":"${{ github.token }}"}}' \
             php:8.1-cli-alpine \
             sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions apcu decimal redis msgpack xdebug && test ! -f /tmp/pecl-called && php ./scripts/check-installed-extension.php apcu decimal redis msgpack xdebug && php --ri redis | grep -q "Available compression => lzf"'
       -
@@ -323,7 +353,6 @@ jobs:
             --workdir /app \
             --env CI=true \
             --env IPE_USE_PIE=1 \
-            --env COMPOSER_AUTH='{"github-oauth":{"github.com":"${{ github.token }}"}}' \
             php:8.1-cli-alpine \
             sh -c './install-php-extensions ds >/tmp/log 2>&1 && php ./scripts/check-installed-extension.php ds && ! grep -q "DOWNLOADING PIE" /tmp/log'
 
@@ -356,7 +385,6 @@ jobs:
             --workdir /app \
             --env CI=true \
             --env IPE_USE_PIE=1 \
-            --env COMPOSER_AUTH='{"github-oauth":{"github.com":"${{ github.token }}"}}' \
             "${{ matrix.container }}" \
             sh -c './install-php-extensions apcu ssh2 && php ./scripts/check-installed-extension.php apcu ssh2'
       -
@@ -368,7 +396,6 @@ jobs:
             --workdir /app \
             --env CI=true \
             --env IPE_USE_PIE=1 \
-            --env COMPOSER_AUTH='{"github-oauth":{"github.com":"${{ github.token }}"}}' \
             php:8.1-cli-bookworm \
             sh -c './install-php-extensions xdebug-3.2.2 >/tmp/log 2>&1 && php --ri xdebug | grep -Eq "Version +=> +3.2.2" && grep -q "falling back to the standard installer" /tmp/log'
       -
@@ -393,6 +420,85 @@ jobs:
             --env IPE_REQUIRE_PIE=1 \
             "${{ matrix.container }}" \
             sh -c './install-php-extensions ssh2 >/tmp/log 2>&1 && exit 1; grep -q "PIE is required but cannot be used for ssh2" /tmp/log'
+
+  test_pie_errors:
+    name: Test PIE error handling
+    needs:
+      - check_syntax_data
+      - check_syntax_shell
+      - check_issues_shell
+      - check_syntax_php
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Docker pull
+        run: docker pull php:8.4-cli-bookworm
+      -
+        name: Checkout
+        uses: actions/checkout@v7
+      -
+        name: Check that IPE_REQUIRE_PIE installs
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_REQUIRE_PIE=1 \
+            php:8.4-cli-bookworm \
+            sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions apcu && test ! -f /tmp/pecl-called && php ./scripts/check-installed-extension.php apcu'
+      -
+        name: Check that a checksum mismatch fails
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_USE_PIE=1 \
+            --env IPE_PIE_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+            php:8.4-cli-bookworm \
+            sh -c './install-php-extensions apcu >/tmp/log 2>&1 && exit 1; grep -q "PIE checksum verification failed" /tmp/log'
+      -
+        name: Check that an invalid PIE version fails
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_USE_PIE=1 \
+            --env IPE_PIE_VERSION=invalid \
+            php:8.4-cli-bookworm \
+            sh -c './install-php-extensions apcu >/tmp/log 2>&1 && exit 1; grep -q "Invalid IPE_PIE_VERSION" /tmp/log'
+      -
+        name: Check that IPE_INSECURE installs
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_USE_PIE=1 \
+            --env IPE_INSECURE=1 \
+            php:8.4-cli-bookworm \
+            sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions apcu && test ! -f /tmp/pecl-called'
+      -
+        name: Check that a pre-release selector is rejected
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_REQUIRE_PIE=1 \
+            php:8.4-cli-bookworm \
+            sh -c './install-php-extensions xdebug-beta >/tmp/log 2>&1 && exit 1; grep -q "PIE is required but cannot be used for xdebug" /tmp/log'
+      -
+        name: Check that a partial version stays on PECL
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_USE_PIE=1 \
+            php:8.4-cli-bookworm \
+            sh -c './install-php-extensions xdebug-3.4 >/tmp/log 2>&1 && exit 1; ! grep -q "DOWNLOADING PIE" /tmp/log'
 
   test_composer:
     name: Test installing composer
