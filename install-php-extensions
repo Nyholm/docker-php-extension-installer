@@ -3629,6 +3629,10 @@ installRemoteModule() {
 	printf '### INSTALLING REMOTE MODULE %s ###\n' "$installRemoteModule_module"
 	installRemoteModule_requestedVersion="$(getWantedPHPModuleVersion "$installRemoteModule_module")"
 	installRemoteModule_version="$(resolvePHPModuleVersion "$installRemoteModule_module")"
+	if pieIsRequired && ! moduleMayUsePie "$installRemoteModule_module"; then
+		printf 'PIE is required but cannot be used for %s\n' "$installRemoteModule_module" >&2
+		exit 1
+	fi
 	installRemoteModule_path="$(getModuleSourceCodePath "$installRemoteModule_module")"
 	rm -rf "$CONFIGURE_FILE"
 	rm -rf "$PIE_CONFIGURE_FILE"
@@ -5748,11 +5752,11 @@ installRemoteModule() {
 			printf '  (installing version %s)\n' "$installRemoteModule_version"
 		fi
 		if moduleMayUsePie "$installRemoteModule_module"; then
-			installRemoteModule_pieVersion="$installRemoteModule_requestedVersion"
-			if test -z "$installRemoteModule_pieVersion"; then
-				installRemoteModule_pieVersion="$installRemoteModule_version"
-			fi
-			if ! installPiePackage "$installRemoteModule_module" "$installRemoteModule_pieVersion"; then
+			if ! installPiePackage "$installRemoteModule_module" "$installRemoteModule_requestedVersion"; then
+				if pieIsRequired; then
+					printf 'PIE is required but failed to install %s\n' "$installRemoteModule_module" >&2
+					exit 1
+				fi
 				printf 'PIE failed to install %s, falling back to the standard installer\n' "$installRemoteModule_module" >&2
 				PIE_ENABLED=0
 				if test $USE_PECL -eq 0; then
@@ -5826,12 +5830,34 @@ moduleMayUsePie() {
 	if ! getPiePackageName "$1" >/dev/null; then
 		return 1
 	fi
+	case "$1" in
+		ds)
+			# The 1.x package is not a PIE package, and 2.x requires PHP 8.2
+			if test $PHP_MAJMIN_VERSION -lt 802; then
+				return 1
+			fi
+			;;
+	esac
 	case "$(getWantedPHPModuleVersion "$1")" in
 		alpha | beta | rc | devel | snapshot | preview | *@alpha | *@beta | *@rc | *@dev | *@devel | *@snapshot | *@preview)
 			return 1
 			;;
 	esac
 	return 0
+}
+
+# Check if PIE is required
+#
+# Return:
+#   0: true
+#   1: false
+pieIsRequired() {
+	case "${IPE_REQUIRE_PIE:-}" in
+		1 | y* | Y*)
+			return 0
+			;;
+	esac
+	return 1
 }
 
 # Configure the PECL package installer
@@ -5873,20 +5899,32 @@ configurePecl() {
 #   USE_PIE 0: no, 1: yes
 #   USE_PECL 0: no, 1: yes
 #   PIE_ENABLED 0: no, 1: yes
+#   PIE_REQUESTED 0: no, 1: yes
 configureInstaller() {
 	USE_PICKLE=0
 	USE_PIE=0
 	USE_PECL=0
 	PIE_ENABLED=0
+	PIE_REQUESTED=0
 	case "${IPE_USE_PIE:-}" in
 		1 | y* | Y*)
-			if test $PHP_MAJMIN_VERSION -ge 801; then
-				PIE_ENABLED=1
-			else
-				printf 'PIE requires PHP 8.1 or newer, using PECL\n' >&2
-			fi
+			PIE_REQUESTED=1
 			;;
 	esac
+	if pieIsRequired; then
+		PIE_REQUESTED=1
+	fi
+	if test $PIE_REQUESTED -eq 1; then
+		if test $PHP_MAJMIN_VERSION -lt 801; then
+			if pieIsRequired; then
+				printf 'PIE is required but it needs PHP 8.1 or newer\n' >&2
+				exit 1
+			fi
+			printf 'PIE requires PHP 8.1 or newer, using PECL\n' >&2
+		else
+			PIE_ENABLED=1
+		fi
+	fi
 	for configureInstaller_module in $PHP_MODULES_TO_INSTALL; do
 		if moduleMayUsePie "$configureInstaller_module"; then
 			USE_PIE=1
@@ -5903,12 +5941,16 @@ configureInstaller() {
 			# Make PIE use our temporary directory instead of $HOME/.pie
 			mkdir -p "$PIE_TMP_DIR/pie"
 		else
+			rm -rf "$PIE_TMP_DIR"
+			PIE_TMP_DIR=''
+			if pieIsRequired; then
+				printf 'PIE is required but it could not be downloaded\n' >&2
+				exit 1
+			fi
 			printf 'Failed to download PIE, using PECL\n' >&2
 			PIE_ENABLED=0
 			USE_PIE=0
 			USE_PECL=1
-			rm -rf "$PIE_TMP_DIR"
-			PIE_TMP_DIR=''
 		fi
 	fi
 	if test $USE_PIE -eq 0 || test $USE_PECL -eq 1; then

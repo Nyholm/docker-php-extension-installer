@@ -223,6 +223,8 @@ PIE is used only when all these conditions are met:
 
 All the other extensions use the standard installer, so you can mix them in the same command. If PIE fails to install an extension, the script falls back to the standard installer.
 
+Set `IPE_REQUIRE_PIE=1` to require PIE. In this mode the script fails when a remote extension cannot be installed with PIE. It implies `IPE_USE_PIE=1`.
+
 PIE receives the configure options that the extension package declares. Options that the package does not declare are skipped.
 
 ## Installing composer
@@ -505,6 +507,7 @@ Here's the list of all the supported environment variables:
 | | `IPE_NOSTRIP=1` | By setting this environment variable, compiled PHP extensions will retain their debug symbols (useful for debugging of crashes like segmentation faults) |
 | | `IPE_USE_PIE=1` | Use [PIE](https://github.com/php/pie) instead of PECL for the extensions that have a PIE package (requires PHP 8.1 or newer). Extensions without a PIE package use the standard installer |
 | | `IPE_PIE_VERSION=1.5.2` | The version of PIE to download when `IPE_USE_PIE=1` is used |
+| | `IPE_REQUIRE_PIE=1` | Require PIE. The script fails when a remote extension cannot be installed with PIE, instead of falling back to the standard installer. Implies `IPE_USE_PIE=1` |
 | | `IPE_KEEP_SYSPKG_CACHE=1` | By default the script will clear the apt/apk/pear cache in order to save disk space. You can disable it by setting this environment variable |
 | lzf | `IPE_LZF_BETTERCOMPRESSION=1` | By default `install-php-extensions` compiles the `lzf` extension to prefer speed over size; you can use this environment variable to compile it preferring size over speed |
 | event | `IPE_EVENT_NAMESPACE=`... | By default, the `event` classes are defined in the root namespace. You can use this environment variable to specify a custom namespace |
