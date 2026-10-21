@@ -326,7 +326,7 @@ getPiePackageName() {
 #   A numeric version (nothing if the constraint means the latest version)
 getPieComparableVersion() {
 	case "$1" in
-		'' | latest | stable)
+		'' | latest | stable | @stable | dev-*)
 			;;
 		*)
 			getPieComparableVersion_version="${1%@*}"
@@ -550,6 +550,11 @@ resolvePHPModuleVersion() {
 	else
 		resolvePHPModuleVersion_raw="$2"
 	fi
+	case "$resolvePHPModuleVersion_raw" in
+		@stable)
+			resolvePHPModuleVersion_raw='stable'
+			;;
+	esac
 	resolvePHPModuleVersion_afterCaret="${resolvePHPModuleVersion_raw#^}"
 	if test "$resolvePHPModuleVersion_raw" = "$resolvePHPModuleVersion_afterCaret"; then
 		printf '%s' "$resolvePHPModuleVersion_raw"
@@ -3635,10 +3640,6 @@ installRemoteModule() {
 	printf '### INSTALLING REMOTE MODULE %s ###\n' "$installRemoteModule_module"
 	installRemoteModule_requestedVersion="$(getWantedPHPModuleVersion "$installRemoteModule_module")"
 	installRemoteModule_version="$(resolvePHPModuleVersion "$installRemoteModule_module")"
-	if pieIsRequired && ! moduleMayUsePie "$installRemoteModule_module"; then
-		printf 'PIE is required but cannot be used for %s\n' "$installRemoteModule_module" >&2
-		exit 1
-	fi
 	installRemoteModule_path="$(getModuleSourceCodePath "$installRemoteModule_module")"
 	rm -rf "$CONFIGURE_FILE"
 	rm -rf "$PIE_CONFIGURE_FILE"
@@ -5754,6 +5755,10 @@ installRemoteModule() {
 	if test $installRemoteModule_manuallyInstalled -eq 0; then
 		if test -n "$installRemoteModule_path"; then
 			printf '  (installing version %s from %s)\n' "$installRemoteModule_version" "$installRemoteModule_path"
+		elif moduleMayUsePie "$installRemoteModule_module"; then
+			if test -n "$installRemoteModule_requestedVersion"; then
+				printf '  (installing version %s)\n' "$installRemoteModule_requestedVersion"
+			fi
 		elif test -n "$installRemoteModule_version"; then
 			printf '  (installing version %s)\n' "$installRemoteModule_version"
 		fi
@@ -5838,7 +5843,7 @@ moduleMayUsePie() {
 	fi
 	case "$1" in
 		ds)
-			# The 1.x package is not a PIE package, and 2.x requires PHP 8.2
+			# PIE packages for ds require PHP 8.2 or newer
 			if test $PHP_MAJMIN_VERSION -lt 802; then
 				return 1
 			fi
@@ -5931,6 +5936,22 @@ configureInstaller() {
 			PIE_ENABLED=1
 		fi
 	fi
+	if pieIsRequired; then
+		for configureInstaller_module in $PHP_MODULES_TO_INSTALL; do
+			case "$configureInstaller_module" in
+				@composer | @fix_letsencrypt)
+					continue
+					;;
+			esac
+			if stringInList "$configureInstaller_module" "$BUNDLED_MODULES" && ! stringInList "$configureInstaller_module" "$FORCED_REMOTE_MODULES"; then
+				continue
+			fi
+			if ! moduleMayUsePie "$configureInstaller_module"; then
+				printf 'PIE is required but cannot be used for %s\n' "$configureInstaller_module" >&2
+				exit 1
+			fi
+		done
+	fi
 	for configureInstaller_module in $PHP_MODULES_TO_INSTALL; do
 		if moduleMayUsePie "$configureInstaller_module"; then
 			USE_PIE=1
@@ -5948,9 +5969,7 @@ configureInstaller() {
 		printf '### DOWNLOADING PIE v.%s ###\n' "$IPE_PIE_VERSION"
 		PIE_TMP_DIR="$(mktemp -p /tmp -d)"
 		if curl $IPE_CURL_FLAGS -sSLf "https://github.com/php/pie/releases/download/$IPE_PIE_VERSION/pie.phar" -o "$PIE_TMP_DIR/pie.phar"; then
-			if test -z "$IPE_PIE_SHA256"; then
-				printf 'Skipping PIE checksum verification\n' >&2
-			elif ! printf '%s  %s\n' "$IPE_PIE_SHA256" "$PIE_TMP_DIR/pie.phar" | sha256sum -c - >/dev/null 2>&1; then
+			if ! printf '%s  %s\n' "$IPE_PIE_SHA256" "$PIE_TMP_DIR/pie.phar" | sha256sum -c - >/dev/null 2>&1; then
 				printf 'PIE checksum verification failed\n' >&2
 				rm -rf "$PIE_TMP_DIR"
 				PIE_TMP_DIR=''
@@ -5962,7 +5981,7 @@ configureInstaller() {
 			mkdir -p "$PIE_COMPOSER_HOME"
 			case "${IPE_INSECURE:-}" in
 				1 | y* | Y*)
-					printf '{"config":{"disable-tls":true,"secure-http":false}}\n' >"$PIE_COMPOSER_HOME/config.json"
+					printf '{"config":{"disable-tls":true}}\n' >"$PIE_COMPOSER_HOME/config.json"
 					;;
 			esac
 		else

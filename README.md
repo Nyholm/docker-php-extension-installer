@@ -223,7 +223,7 @@ PIE is used only when all these conditions are met:
 
 All the other extensions use the standard installer, so you can mix them in the same command. If PIE fails to install an extension, the script falls back to the standard installer.
 
-Set `IPE_REQUIRE_PIE=1` to require PIE. In this mode the script fails when a remote extension cannot be installed with PIE. It implies `IPE_USE_PIE=1`.
+Set `IPE_REQUIRE_PIE=1` to require PIE. In this mode the script fails when an extension that is not bundled cannot be installed with PIE. It implies `IPE_USE_PIE=1`.
 
 PIE receives the configure options that the extension package declares. Options that the package does not declare are skipped.
 
@@ -499,7 +499,7 @@ Here's the list of all the supported environment variables:
 | Extension | Environment variable | Description |
 |---|---|---|
 | | `IPE_DEBUG=1` | By setting this environment variable, the script will print all the commands it executes (it will be very verbose, useful only for debug purposes) |
-| | `IPE_INSECURE=1` | By setting this environment variable, HTTPS certificate validation is disabled for network operations performed by the program (including PIE) |
+| | `IPE_INSECURE=1` | By setting this environment variable, HTTPS certificate validation is disabled for network operations performed by the program. For PIE this uses Composer's `disable-tls` setting, which downgrades HTTPS requests to HTTP without encryption |
 | | `IPE_SAVE_PERMDEPS_TO=path`<br />`IPE_SAVE_VOLDEPS_TO=path` | By setting this environment variable, the script will store in the path specified the list of APT/APK packages required by the installed PHP extensions (`IPE_SAVE_PERMDEPS_TO`) and/or the packages required to build the PHP extensions (`IPE_SAVE_VOLDEPS_TO`).<br />Please remark that `install-php-extension` may configure the system in other ways ([example](https://github.com/mlocati/docker-php-extension-installer/blob/2.9.28/install-php-extensions#L2234-L2286)) |
 | | `IPE_PROCESSOR_COUNT` | By default all available processors. Set this environment variable to override the number of processors detected by the script (used for parallel compilation) |
 | | `IPE_DONT_ENABLE=1` | By default the script will install and enable the extensions.<br />If you want to only install them (without enabling them) you can set this environment variable.<br />To enable the extensions at a later time you can execute the command `docker-php-ext-enable-<extension>` (for example: `docker-php-ext-enable-xdebug`).<br />**Beware**: installing some PHP extensions requires that other PHP extensions are already enabled, so use this feature wisely. |
@@ -508,7 +508,7 @@ Here's the list of all the supported environment variables:
 | | `IPE_USE_PIE=1` | Use [PIE](https://github.com/php/pie) instead of PECL for the extensions that have a PIE package (requires PHP 8.1 or newer). Extensions without a PIE package use the standard installer |
 | | `IPE_PIE_VERSION=1.5.2` | The version of PIE to download when `IPE_USE_PIE=1` is used |
 | | `IPE_PIE_SHA256` | The expected SHA-256 of the PIE phar. It defaults to the hash of the pinned version. Set it when overriding `IPE_PIE_VERSION` |
-| | `IPE_REQUIRE_PIE=1` | Require PIE. The script fails when a remote extension cannot be installed with PIE, instead of falling back to the standard installer. Implies `IPE_USE_PIE=1` |
+| | `IPE_REQUIRE_PIE=1` | Require PIE. The script fails when an extension that is not bundled cannot be installed with PIE, instead of falling back to the standard installer. Implies `IPE_USE_PIE=1` |
 | | `IPE_KEEP_SYSPKG_CACHE=1` | By default the script will clear the apt/apk/pear cache in order to save disk space. You can disable it by setting this environment variable |
 | lzf | `IPE_LZF_BETTERCOMPRESSION=1` | By default `install-php-extensions` compiles the `lzf` extension to prefer speed over size; you can use this environment variable to compile it preferring size over speed |
 | event | `IPE_EVENT_NAMESPACE=`... | By default, the `event` classes are defined in the root namespace. You can use this environment variable to specify a custom namespace |
