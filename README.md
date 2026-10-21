@@ -216,7 +216,7 @@ IPE_USE_PIE=1 install-php-extensions xdebug
 PIE is used only when all these conditions are met:
 
 - the PHP version is 8.1 or newer
-- the extension has a PIE package (currently: `apcu`, `ast`, `brotli`, `decimal`, `ds`, `excimer`, `imagick`, `inotify`, `mailparse`, `msgpack`, `parallel`, `pcov`, `rdkafka`, `timezonedb`, `uuid`, `xdebug`, `yaml`, `zstd`)
+- the extension has a PIE package supported by this script
 - the extension is not installed from its source code
 - the extension is not a bundled extension
 
