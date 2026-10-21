@@ -330,6 +330,17 @@ getPieComparableVersion() {
 			;;
 		*)
 			getPieComparableVersion_version="${1%@*}"
+			case "$getPieComparableVersion_version" in
+				'>='*)
+					getPieComparableVersion_version="${getPieComparableVersion_version#??}"
+					;;
+				'>'*)
+					getPieComparableVersion_version="${getPieComparableVersion_version#?}"
+					;;
+				'~'*)
+					getPieComparableVersion_version="${getPieComparableVersion_version#?}"
+					;;
+			esac
 			getPieComparableVersion_version="${getPieComparableVersion_version#^}"
 			case "$getPieComparableVersion_version" in
 				*.*.*) ;;
@@ -5865,7 +5876,8 @@ moduleMayUsePie() {
 			esac
 			;;
 	esac
-	case "$(getWantedPHPModuleVersion "$1")" in
+	moduleMayUsePie_stability="$(printf '%s' "$(getWantedPHPModuleVersion "$1")" | tr '[:upper:]' '[:lower:]')"
+	case "$moduleMayUsePie_stability" in
 		alpha | beta | rc | devel | snapshot | preview | *@alpha | *@beta | *@rc | *@dev | *@devel | *@snapshot | *@preview)
 			return 1
 			;;
