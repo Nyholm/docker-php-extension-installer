@@ -203,6 +203,27 @@ If instead you want to use a remote version:
 - oci8
 - zip
 
+## Using PIE instead of PECL
+
+[PIE](https://github.com/php/pie) is the official installer for PHP extensions, and PECL is now deprecated.
+
+By default, `install-php-extensions` uses PECL. You can opt in to PIE by setting the `IPE_USE_PIE=1` environment variable:
+
+```sh
+IPE_USE_PIE=1 install-php-extensions xdebug
+```
+
+PIE is used only when all these conditions are met:
+
+- the PHP version is 8.1 or newer
+- the extension has a PIE package (currently: `apcu`, `ast`, `brotli`, `decimal`, `ds`, `excimer`, `imagick`, `inotify`, `mailparse`, `msgpack`, `parallel`, `pcov`, `rdkafka`, `timezonedb`, `uuid`, `xdebug`, `yaml`, `zstd`)
+- the extension is not installed from its source code
+- the extension is not a bundled extension
+
+All the other extensions use the standard installer, so you can mix them in the same command. If PIE fails to install an extension, the script falls back to PECL.
+
+PIE installs extensions with the default configure options of their package, so some optional features may not be enabled.
+
 ## Installing composer
 
 You can also install [composer](https://getcomposer.org/), and you also can specify a major version of it, or a full version.
@@ -481,6 +502,8 @@ Here's the list of all the supported environment variables:
 | | `IPE_DONT_ENABLE=1` | By default the script will install and enable the extensions.<br />If you want to only install them (without enabling them) you can set this environment variable.<br />To enable the extensions at a later time you can execute the command `docker-php-ext-enable-<extension>` (for example: `docker-php-ext-enable-xdebug`).<br />**Beware**: installing some PHP extensions requires that other PHP extensions are already enabled, so use this feature wisely. |
 | | `IPE_SKIP_CHECK=1` | By default the script will check if the extensions can be enabled: if you want to skip this check, you can use this flag.<br />**Beware**: extensions may be enabled even if they break PHP: use this function wisely. |
 | | `IPE_NOSTRIP=1` | By setting this environment variable, compiled PHP extensions will retain their debug symbols (useful for debugging of crashes like segmentation faults) |
+| | `IPE_USE_PIE=1` | Use [PIE](https://github.com/php/pie) instead of PECL for the extensions that have a PIE package (requires PHP 8.1 or newer). Extensions without a PIE package use the standard installer |
+| | `IPE_PIE_VERSION=1.5.2` | The version of PIE to download when `IPE_USE_PIE=1` is used |
 | | `IPE_KEEP_SYSPKG_CACHE=1` | By default the script will clear the apt/apk/pear cache in order to save disk space. You can disable it by setting this environment variable |
 | lzf | `IPE_LZF_BETTERCOMPRESSION=1` | By default `install-php-extensions` compiles the `lzf` extension to prefer speed over size; you can use this environment variable to compile it preferring size over speed |
 | event | `IPE_EVENT_NAMESPACE=`... | By default, the `event` classes are defined in the root namespace. You can use this environment variable to specify a custom namespace |
