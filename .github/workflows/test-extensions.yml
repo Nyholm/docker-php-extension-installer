@@ -447,6 +447,16 @@ jobs:
             php:8.4-cli-bookworm \
             sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions apcu && test ! -f /tmp/pecl-called && php ./scripts/check-installed-extension.php apcu'
       -
+        name: Check that a bundled-only request does not require PIE
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_REQUIRE_PIE=1 \
+            php:7.4-cli-alpine \
+            sh -c './install-php-extensions gd && php ./scripts/check-installed-extension.php gd'
+      -
         name: Check that a checksum mismatch fails
         run: |
           docker run --rm \
@@ -488,7 +498,12 @@ jobs:
             --env CI=true \
             --env IPE_REQUIRE_PIE=1 \
             php:8.4-cli-bookworm \
-            sh -c './install-php-extensions xdebug-beta >/tmp/log 2>&1 && exit 1; grep -q "PIE is required but cannot be used for xdebug" /tmp/log'
+            sh -c '
+              if ./install-php-extensions xdebug-beta >/tmp/log1 2>&1; then exit 1; fi
+              grep -q "PIE is required but cannot be used for xdebug" /tmp/log1 || exit 1
+              if ./install-php-extensions "xdebug-^3@RC" >/tmp/log2 2>&1; then exit 1; fi
+              grep -q "PIE is required but cannot be used for xdebug" /tmp/log2
+            '
       -
         name: Check that a partial version stays on PECL
         run: |
@@ -498,7 +513,34 @@ jobs:
             --env CI=true \
             --env IPE_USE_PIE=1 \
             php:8.4-cli-bookworm \
-            sh -c './install-php-extensions xdebug-3.4 >/tmp/log 2>&1 && exit 1; ! grep -q "DOWNLOADING PIE" /tmp/log'
+            sh -c '
+              mkdir -p /tmp/fakebin
+              printf "#!/bin/sh\nif test \"\$1\" = install; then touch /tmp/pecl-install-called; fi\nexit 1\n" > /tmp/fakebin/pecl
+              chmod +x /tmp/fakebin/pecl
+              if PATH="/tmp/fakebin:$PATH" ./install-php-extensions xdebug-3.4 >/tmp/log 2>&1; then exit 1; fi
+              test -f /tmp/pecl-install-called || exit 1
+              ! grep -q "DOWNLOADING PIE" /tmp/log
+            '
+      -
+        name: Check that a PIE install failure aborts strict mode
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_REQUIRE_PIE=1 \
+            php:8.1-cli-bookworm \
+            sh -c 'if ./install-php-extensions xdebug-3.2.2 >/tmp/log 2>&1; then exit 1; fi; grep -q "PIE is required but failed to install xdebug" /tmp/log'
+      -
+        name: Check a range constraint
+        run: |
+          docker run --rm \
+            --volume "$(pwd):/app" \
+            --workdir /app \
+            --env CI=true \
+            --env IPE_USE_PIE=1 \
+            php:8.4-cli-bookworm \
+            sh -c 'mkdir -p /tmp/fakebin && printf "#!/bin/sh\ntouch /tmp/pecl-called\nexit 1\n" > /tmp/fakebin/pecl && chmod +x /tmp/fakebin/pecl && PATH="/tmp/fakebin:$PATH" ./install-php-extensions "redis-~6.0" && test ! -f /tmp/pecl-called && php --ri redis | grep -q "lz4"'
 
   test_composer:
     name: Test installing composer
