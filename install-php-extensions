@@ -63,7 +63,8 @@ IPE_EXTVERSION_V8JS="${IPE_EXTVERSION_V8JS:-8a39efa3cf3b275e402ddf3c4f6b611a5f69
 IPE_EXTVERSION_YAJL_STREAM="${IPE_EXTVERSION_YAJL_STREAM:-0.1.0}"
 
 # The version of PIE (the PHP Installer for Extensions) used when IPE_USE_PIE is enabled
-IPE_PIE_VERSION="${IPE_PIE_VERSION:-1.5.2}"
+IPE_EXTVERSION_PIE="${IPE_EXTVERSION_PIE:-1.5.2}"
+IPE_PIE_VERSION="${IPE_PIE_VERSION:-$IPE_EXTVERSION_PIE}"
 
 # The expected SHA-256 of the PIE phar
 IPE_PIE_SHA256="${IPE_PIE_SHA256:-fe70c59738cf56ec00a818cf9cb9593da171aac86f5f1f859995b8839dfd2cc7}"
@@ -251,6 +252,11 @@ getPeclModuleName() {
 #   The PIE package name (nothing if the extension can't be installed using PIE)
 getPiePackageName() {
 	case "$1" in
+		*/*)
+			printf '%s' "${1%%:*}"
+			return 0
+			;;
+		# START OF PIE PACKAGES (generated from data/pie-packages)
 		apcu)
 			printf '%s' 'apcu/apcu'
 			;;
@@ -311,10 +317,16 @@ getPiePackageName() {
 		zstd)
 			printf '%s' 'kjdev/zstd'
 			;;
+		# END OF PIE PACKAGES (generated from data/pie-packages)
 		*)
 			return 1
 			;;
 	esac
+}
+
+# Check if an argument is a PIE package name (vendor/package with an optional :version constraint)
+isPiePackageArgument() {
+	printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | grep -Eq '^[a-z0-9][a-z0-9_.-]*/[a-z0-9][a-z0-9_.-]*(:[^[:space:]]+)?$'
 }
 
 # Get a version comparable with compareVersions from a PIE version constraint
@@ -489,6 +501,9 @@ processPHPModuleArgument() {
 			printf 'Unable to parse the following module name:\n%s\n' "$PROCESSED_PHP_MODULE_ARGUMENT" >&2
 			exit 1
 		fi
+	elif isPiePackageArgument "$processPHPModuleArgument_arg"; then
+		PROCESSED_PHP_MODULE_ARGUMENT="$(printf '%s' "$processPHPModuleArgument_arg" | tr '[:upper:]' '[:lower:]')"
+		processPHPModuleArgument_version=''
 	else
 		PROCESSED_PHP_MODULE_ARGUMENT="${processPHPModuleArgument_arg%%-*}"
 		if test -n "$PROCESSED_PHP_MODULE_ARGUMENT" && test "$PROCESSED_PHP_MODULE_ARGUMENT" != "$processPHPModuleArgument_arg"; then
@@ -4312,7 +4327,10 @@ installRemoteModule() {
 				# Use system crypto profile (OpenSSL only)? (yes/no)
 				addConfigureOption enable-mongodb-crypto-system-profile yes
 				# Use bundled or system utf8proc for SCRAM-SHA-256 SASLprep? (bundled/system)
-				addConfigureOption with-mongodb-utf8proc bundled
+				if ! moduleMayUsePie mongodb; then
+					# The PIE package doesn't declare this option, and its default is bundled.
+					addConfigureOption with-mongodb-utf8proc bundled
+				fi
 			fi
 			;;
 		mosquitto)
@@ -5763,6 +5781,13 @@ installRemoteModule() {
 			fi
 			;;
 	esac
+	if isPiePackageArgument "$installRemoteModule_module"; then
+		if ! installPiePackageDirect "$installRemoteModule_module"; then
+			printf 'PIE failed to install %s\n' "$installRemoteModule_module" >&2
+			exit 1
+		fi
+		return
+	fi
 	if test $installRemoteModule_manuallyInstalled -eq 0; then
 		if test -n "$installRemoteModule_path"; then
 			printf '  (installing version %s from %s)\n' "$installRemoteModule_version" "$installRemoteModule_path"
@@ -5777,6 +5802,10 @@ installRemoteModule() {
 			if ! installPiePackage "$installRemoteModule_module" "$installRemoteModule_requestedVersion"; then
 				if pieIsRequired; then
 					printf 'PIE is required but failed to install %s\n' "$installRemoteModule_module" >&2
+					exit 1
+				fi
+				if ! pieFallbackAllowed; then
+					printf 'PIE failed to install %s. Set IPE_ALLOW_PIE_FALLBACK=1 to fall back to the standard installer.\n' "$installRemoteModule_module" >&2
 					exit 1
 				fi
 				printf 'PIE failed to install %s, falling back to the standard installer\n' "$installRemoteModule_module" >&2
@@ -5814,6 +5843,9 @@ installRemoteModule() {
 #   0: true
 #   1: false
 moduleMayUsePecl() {
+	if isPiePackageArgument "$1"; then
+		return 1
+	fi
 	case "$1" in
 		@composer | @fix_letsencrypt)
 			return 1
@@ -5848,6 +5880,9 @@ moduleMayUsePie() {
 	fi
 	if stringInList "$1" "$BUNDLED_MODULES"; then
 		return 1
+	fi
+	if isPiePackageArgument "$1"; then
+		return 0
 	fi
 	if ! getPiePackageName "$1" >/dev/null; then
 		return 1
@@ -5892,6 +5927,15 @@ moduleMayUsePie() {
 #   1: false
 pieIsRequired() {
 	case "${IPE_REQUIRE_PIE:-}" in
+		1 | y* | Y*)
+			return 0
+			;;
+	esac
+	return 1
+}
+
+pieFallbackAllowed() {
+	case "${IPE_ALLOW_PIE_FALLBACK:-}" in
 		1 | y* | Y*)
 			return 0
 			;;
@@ -5945,12 +5989,22 @@ configureInstaller() {
 	USE_PECL=0
 	PIE_ENABLED=0
 	PIE_REQUESTED=0
+	PIE_DIRECT_REQUESTED=0
 	case "${IPE_USE_PIE:-}" in
 		1 | y* | Y*)
 			PIE_REQUESTED=1
 			;;
 	esac
 	if pieIsRequired; then
+		PIE_REQUESTED=1
+	fi
+	for configureInstaller_module in $PHP_MODULES_TO_INSTALL; do
+		if isPiePackageArgument "$configureInstaller_module"; then
+			PIE_DIRECT_REQUESTED=1
+			break
+		fi
+	done
+	if test $PIE_DIRECT_REQUESTED -eq 1; then
 		PIE_REQUESTED=1
 	fi
 	PIE_REMOTE_MODULES=0
@@ -5971,6 +6025,10 @@ configureInstaller() {
 	if test $PIE_REQUESTED -eq 1; then
 		if test $PHP_MAJMIN_VERSION -lt 801; then
 			if test $PIE_REMOTE_MODULES -eq 1; then
+				if test $PIE_DIRECT_REQUESTED -eq 1; then
+					printf 'PIE package requests require PHP 8.1 or newer\n' >&2
+					exit 1
+				fi
 				if pieIsRequired; then
 					printf 'PIE is required but it needs PHP 8.1 or newer\n' >&2
 					exit 1
@@ -5994,6 +6052,21 @@ configureInstaller() {
 			if ! moduleMayUsePie "$configureInstaller_module"; then
 				printf 'PIE is required but cannot be used for %s\n' "$configureInstaller_module" >&2
 				exit 1
+			fi
+		done
+	fi
+	if test $PIE_REQUESTED -eq 1 && test $PIE_ENABLED -eq 1; then
+		for configureInstaller_module in $PHP_MODULES_TO_INSTALL; do
+			case "$configureInstaller_module" in
+				@composer | @fix_letsencrypt)
+					continue
+					;;
+			esac
+			if stringInList "$configureInstaller_module" "$BUNDLED_MODULES" && ! stringInList "$configureInstaller_module" "$FORCED_REMOTE_MODULES"; then
+				continue
+			fi
+			if ! moduleMayUsePie "$configureInstaller_module"; then
+				printf 'PIE is not used for %s, using the standard installer\n' "$configureInstaller_module" >&2
 			fi
 		done
 	fi
@@ -6034,6 +6107,14 @@ configureInstaller() {
 			PIE_TMP_DIR=''
 			if pieIsRequired; then
 				printf 'PIE is required but it could not be downloaded\n' >&2
+				exit 1
+			fi
+			if test $PIE_DIRECT_REQUESTED -eq 1; then
+				printf 'PIE package requests require PIE, but it could not be downloaded\n' >&2
+				exit 1
+			fi
+			if ! pieFallbackAllowed; then
+				printf 'Failed to download PIE. Set IPE_ALLOW_PIE_FALLBACK=1 to fall back to PECL.\n' >&2
 				exit 1
 			fi
 			printf 'Failed to download PIE, using PECL\n' >&2
@@ -6098,9 +6179,6 @@ getPieConfigureOptions() {
 		return 1
 	fi
 	getPieConfigureOptions_declared="$(printf '%s\n' "$getPieConfigureOptions_info" | awk '/^    --/ { n=$1; sub(/^--/,"",n); v="-"; if (n ~ /=[?]$/) { sub(/=[?]$/,"",n); v="=?" } print n, v }')"
-	if test -z "$getPieConfigureOptions_declared"; then
-		return 0
-	fi
 	getPieConfigureOptions_valueOptions=''
 	getPieConfigureOptions_flagOptions=''
 	while read -r getPieConfigureOptions_declaredName getPieConfigureOptions_declaredValue; do
@@ -6130,7 +6208,8 @@ EOF
 		fi
 	done <"$PIE_CONFIGURE_FILE"
 	if test -n "$getPieConfigureOptions_skipped"; then
-		printf 'Skipping configure options not declared by the package:%s\n' "$getPieConfigureOptions_skipped" >&2
+		printf 'The PIE package %s does not declare the following configure options:%s\n' "$1" "$getPieConfigureOptions_skipped" >&2
+		return 1
 	fi
 	printf '%s' "$getPieConfigureOptions_flags"
 }
@@ -6164,6 +6243,28 @@ installPiePackage() {
 		--with-php-config="$(command -v php-config)" \
 		$installPiePackage_configureOptions \
 		"$installPiePackage_request"
+}
+
+# Install a PIE package passed as vendor/package[:version]
+#
+# Arguments:
+#   $1: the PIE package request
+installPiePackageDirect() {
+	installPiePackageDirect_skipEnable=''
+	case "${IPE_DONT_ENABLE:-}" in
+		1 | y* | Y*)
+			installPiePackageDirect_skipEnable='--skip-enable-extension'
+			;;
+	esac
+	COMPOSER_HOME="$PIE_COMPOSER_HOME" XDG_CONFIG_HOME="$PIE_TMP_DIR" php "$PIE_TMP_DIR/pie.phar" install \
+		--no-cache \
+		--auto-install-build-tools \
+		--auto-install-system-dependencies \
+		--no-interaction \
+		$installPiePackageDirect_skipEnable \
+		--make-parallel-jobs="$(getCompilationProcessorCount "$1")" \
+		--with-php-config="$(command -v php-config)" \
+		"$1"
 }
 
 # Actually installs a PECL package
