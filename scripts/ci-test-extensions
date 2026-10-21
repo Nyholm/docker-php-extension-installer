@@ -306,6 +306,32 @@ getPieMinPhpVersion() {
 	awk -v extension="$1" '$1 == extension { print $2; exit }' "$CI_BUILD_DIR/data/pie-packages"
 }
 
+# Remove the extensions whose PIE package is not usable on the current distro
+#
+# Arguments:
+# $1: space-separated list with the names of the PHP extensions
+filterPieUnsupportedExtensionsForDistro() {
+	filterPieUnsupportedExtensionsForDistro_result=''
+	IFS=' '
+	for filterPieUnsupportedExtensionsForDistro_extension in $1; do
+		filterPieUnsupportedExtensionsForDistro_exclusions="$(awk -v extension="$filterPieUnsupportedExtensionsForDistro_extension" '$1 == extension { for (i = 4; i <= NF; i++) print $i; exit }' "$CI_BUILD_DIR/data/pie-packages")"
+		filterPieUnsupportedExtensionsForDistro_excluded=0
+		for filterPieUnsupportedExtensionsForDistro_exclusion in $filterPieUnsupportedExtensionsForDistro_exclusions; do
+			case "$filterPieUnsupportedExtensionsForDistro_exclusion" in
+				"!$IPETEST_DOCKER_DISTRO")
+					filterPieUnsupportedExtensionsForDistro_excluded=1
+					break
+					;;
+			esac
+		done
+		if test $filterPieUnsupportedExtensionsForDistro_excluded -eq 0; then
+			filterPieUnsupportedExtensionsForDistro_result="$filterPieUnsupportedExtensionsForDistro_result $filterPieUnsupportedExtensionsForDistro_extension"
+		fi
+	done
+	resetIFS
+	printf '%s' "${filterPieUnsupportedExtensionsForDistro_result# }"
+}
+
 # Test extensions
 #
 # Arguments:
@@ -522,7 +548,9 @@ case "${1:-}" in
 	pie)
 		TEST_PIE=1
 		TEST_DOCKER_ENV='--env IPE_REQUIRE_PIE=1'
-		runTests "$(cut -d' ' -f1 "$CI_BUILD_DIR/data/pie-packages" | tr '\n' ' ')"
+		pie_extensions="$(cut -d' ' -f1 "$CI_BUILD_DIR/data/pie-packages" | tr '\n' ' ')"
+		pie_extensions="$(filterPieUnsupportedExtensionsForDistro "$pie_extensions")"
+		runTests "$pie_extensions"
 		;;
 	from-tests-file)
 		if test -z "${2:-}" || test -z "${3:-}"; then

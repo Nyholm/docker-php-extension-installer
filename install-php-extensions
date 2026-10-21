@@ -1660,7 +1660,7 @@ buildRequiredPackageLists() {
 							## libzstd is too old (available: 1.1.2, required: 1.3.0+)
 							;;
 						*)
-							buildRequiredPackageLists_persistent="$buildRequiredPackageLists_persistent ^libzstd[0-9]*$"
+							buildRequiredPackageLists_persistent="$buildRequiredPackageLists_persistent libzstd1"
 							buildRequiredPackageLists_volatile="$buildRequiredPackageLists_volatile libzstd-dev"
 							;;
 					esac
@@ -1670,7 +1670,7 @@ buildRequiredPackageLists() {
 					buildRequiredPackageLists_volatile="$buildRequiredPackageLists_volatile liblz4-dev"
 				fi
 				if moduleMayUsePie redis; then
-					buildRequiredPackageLists_persistent="$buildRequiredPackageLists_persistent ^liblzf[0-9]*$"
+					buildRequiredPackageLists_persistent="$buildRequiredPackageLists_persistent liblzf1"
 					buildRequiredPackageLists_volatile="$buildRequiredPackageLists_volatile liblzf-dev"
 				fi
 				;;
@@ -4613,7 +4613,7 @@ installRemoteModule() {
 						installRemoteModule_tmp='librdkafka'
 						;;
 					debian)
-						installRemoteModule_tmp='librdkafka*'
+						installRemoteModule_tmp='librdkafka1'
 						;;
 					*)
 						installRemoteModule_tmp=''
@@ -5906,31 +5906,49 @@ moduleMayUsePie() {
 			# END OF PIE MINIMUM PHP VERSIONS (generated from data/pie-packages)
 	esac
 	case "$1" in
+		# START OF PIE UNSUPPORTED DISTROS (generated from data/pie-packages)
 		excimer)
-			if test "$DISTRO" = alpine && test $DISTRO_MAJMIN_VERSION -le 313; then
-				return 1
-			fi
-			;;
-		rdkafka)
-			case "$DISTRO" in
-				alpine)
-					moduleMayUsePie_librdkafkaPackage='librdkafka'
-					;;
-				debian)
-					moduleMayUsePie_librdkafkaPackage='librdkafka*'
-					;;
-				*)
-					moduleMayUsePie_librdkafkaPackage=''
+			case "$DISTRO_VERSION" in
+				alpine@3.9 | alpine@3.10 | alpine@3.11 | alpine@3.12 | alpine@3.13)
+					return 1
 					;;
 			esac
-			if test -n "$moduleMayUsePie_librdkafkaPackage"; then
-				moduleMayUsePie_librdkafkaVersion="$(getInstalledPackageVersion "$moduleMayUsePie_librdkafkaPackage")"
-				if test -n "$moduleMayUsePie_librdkafkaVersion" && test $(compareVersions "$moduleMayUsePie_librdkafkaVersion" '0.11.0') -lt 0; then
-					return 1
-				fi
-			fi
 			;;
+		rdkafka)
+			case "$DISTRO_VERSION" in
+				debian@9)
+					return 1
+					;;
+			esac
+			;;
+		redis)
+			case "$DISTRO_VERSION" in
+				alpine@3.9 | alpine@3.10 | alpine@3.11 | alpine@3.12 | alpine@3.13 | debian@8 | debian@9 | debian@10)
+					return 1
+					;;
+			esac
+			;;
+			# END OF PIE UNSUPPORTED DISTROS (generated from data/pie-packages)
 	esac
+	if test "$1" = rdkafka; then
+		case "$DISTRO" in
+			alpine)
+				moduleMayUsePie_librdkafkaPackage='librdkafka'
+				;;
+			debian)
+				moduleMayUsePie_librdkafkaPackage='librdkafka1'
+				;;
+			*)
+				moduleMayUsePie_librdkafkaPackage=''
+				;;
+		esac
+		if test -n "$moduleMayUsePie_librdkafkaPackage"; then
+			moduleMayUsePie_librdkafkaVersion="$(getInstalledPackageVersion "$moduleMayUsePie_librdkafkaPackage")"
+			if test -n "$moduleMayUsePie_librdkafkaVersion" && test $(compareVersions "$moduleMayUsePie_librdkafkaVersion" '0.11.0') -lt 0; then
+				return 1
+			fi
+		fi
+	fi
 	moduleMayUsePie_version="$(getWantedPHPModuleVersion "$1")"
 	case "$moduleMayUsePie_version" in
 		'' | latest | stable | @stable | dev-* | ^*)
