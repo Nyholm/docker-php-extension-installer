@@ -507,6 +507,7 @@ Here's the list of all the supported environment variables:
 | | `IPE_NOSTRIP=1` | By setting this environment variable, compiled PHP extensions will retain their debug symbols (useful for debugging of crashes like segmentation faults) |
 | | `IPE_USE_PIE=1` | Use [PIE](https://github.com/php/pie) instead of PECL for the extensions that have a PIE package (requires PHP 8.1 or newer). Extensions without a PIE package use the standard installer |
 | | `IPE_PIE_VERSION=1.5.2` | The version of PIE to download when `IPE_USE_PIE=1` is used |
+| | `IPE_PIE_SHA256` | The expected SHA-256 of the PIE phar. It defaults to the hash of the pinned version. Set it when overriding `IPE_PIE_VERSION` |
 | | `IPE_REQUIRE_PIE=1` | Require PIE. The script fails when a remote extension cannot be installed with PIE, instead of falling back to the standard installer. Implies `IPE_USE_PIE=1` |
 | | `IPE_KEEP_SYSPKG_CACHE=1` | By default the script will clear the apt/apk/pear cache in order to save disk space. You can disable it by setting this environment variable |
 | lzf | `IPE_LZF_BETTERCOMPRESSION=1` | By default `install-php-extensions` compiles the `lzf` extension to prefer speed over size; you can use this environment variable to compile it preferring size over speed |

@@ -65,6 +65,9 @@ IPE_EXTVERSION_YAJL_STREAM="${IPE_EXTVERSION_YAJL_STREAM:-0.1.0}"
 # The version of PIE (the PHP Installer for Extensions) used when IPE_USE_PIE is enabled
 IPE_PIE_VERSION="${IPE_PIE_VERSION:-1.5.2}"
 
+# The expected SHA-256 of the PIE phar
+IPE_PIE_SHA256="${IPE_PIE_SHA256:-fe70c59738cf56ec00a818cf9cb9593da171aac86f5f1f859995b8839dfd2cc7}"
+
 # The temporary directory used by PIE to store its data (set by configureInstaller)
 PIE_TMP_DIR=''
 
@@ -5938,9 +5941,21 @@ configureInstaller() {
 		fi
 	done
 	if test $USE_PIE -eq 1; then
+		if ! printf '%s' "$IPE_PIE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+			printf 'Invalid IPE_PIE_VERSION: %s\n' "$IPE_PIE_VERSION" >&2
+			exit 1
+		fi
 		printf '### DOWNLOADING PIE v.%s ###\n' "$IPE_PIE_VERSION"
 		PIE_TMP_DIR="$(mktemp -p /tmp -d)"
 		if curl $IPE_CURL_FLAGS -sSLf "https://github.com/php/pie/releases/download/$IPE_PIE_VERSION/pie.phar" -o "$PIE_TMP_DIR/pie.phar"; then
+			if test -z "$IPE_PIE_SHA256"; then
+				printf 'Skipping PIE checksum verification\n' >&2
+			elif ! printf '%s  %s\n' "$IPE_PIE_SHA256" "$PIE_TMP_DIR/pie.phar" | sha256sum -c - >/dev/null 2>&1; then
+				printf 'PIE checksum verification failed\n' >&2
+				rm -rf "$PIE_TMP_DIR"
+				PIE_TMP_DIR=''
+				exit 1
+			fi
 			# Make PIE use our temporary directory instead of $HOME/.pie
 			mkdir -p "$PIE_TMP_DIR/pie"
 			PIE_COMPOSER_HOME="$PIE_TMP_DIR/composer"
