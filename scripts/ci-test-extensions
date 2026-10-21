@@ -312,7 +312,6 @@ getPieMinPhpVersion() {
 # $1: space-separated list with the names of the PHP extensions
 filterPieUnsupportedExtensionsForDistro() {
 	filterPieUnsupportedExtensionsForDistro_result=''
-	IFS=' '
 	for filterPieUnsupportedExtensionsForDistro_extension in $1; do
 		filterPieUnsupportedExtensionsForDistro_exclusions="$(awk -v extension="$filterPieUnsupportedExtensionsForDistro_extension" '$1 == extension { for (i = 4; i <= NF; i++) print $i; exit }' "$CI_BUILD_DIR/data/pie-packages")"
 		filterPieUnsupportedExtensionsForDistro_excluded=0
@@ -328,7 +327,6 @@ filterPieUnsupportedExtensionsForDistro() {
 			filterPieUnsupportedExtensionsForDistro_result="$filterPieUnsupportedExtensionsForDistro_result $filterPieUnsupportedExtensionsForDistro_extension"
 		fi
 	done
-	resetIFS
 	printf '%s' "${filterPieUnsupportedExtensionsForDistro_result# }"
 }
 
