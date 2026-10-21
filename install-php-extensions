@@ -68,6 +68,9 @@ IPE_PIE_VERSION="${IPE_PIE_VERSION:-1.5.2}"
 # The temporary directory used by PIE to store its data (set by configureInstaller)
 PIE_TMP_DIR=''
 
+# The Composer home directory used by PIE (set by configureInstaller)
+PIE_COMPOSER_HOME=''
+
 StandWithUkraine() {
 	if test -t 1 && ! grep -Eq '^VERSION=.*jessie' /etc/os-release; then
 		printf '\e[37;44m#StandWith\e[30;43mUkraine\e[0m\n'
@@ -5940,6 +5943,13 @@ configureInstaller() {
 		if curl $IPE_CURL_FLAGS -sSLf "https://github.com/php/pie/releases/download/$IPE_PIE_VERSION/pie.phar" -o "$PIE_TMP_DIR/pie.phar"; then
 			# Make PIE use our temporary directory instead of $HOME/.pie
 			mkdir -p "$PIE_TMP_DIR/pie"
+			PIE_COMPOSER_HOME="$PIE_TMP_DIR/composer"
+			mkdir -p "$PIE_COMPOSER_HOME"
+			case "${IPE_INSECURE:-}" in
+				1 | y* | Y*)
+					printf '{"config":{"disable-tls":true,"secure-http":false}}\n' >"$PIE_COMPOSER_HOME/config.json"
+					;;
+			esac
 		else
 			rm -rf "$PIE_TMP_DIR"
 			PIE_TMP_DIR=''
@@ -6004,7 +6014,7 @@ getPieConfigureOptions() {
 	if ! test -s "$PIE_CONFIGURE_FILE"; then
 		return 0
 	fi
-	if ! getPieConfigureOptions_info="$(XDG_CONFIG_HOME="$PIE_TMP_DIR" php "$PIE_TMP_DIR/pie.phar" info --no-cache --with-php-config="$(command -v php-config)" "$1")"; then
+	if ! getPieConfigureOptions_info="$(COMPOSER_HOME="$PIE_COMPOSER_HOME" XDG_CONFIG_HOME="$PIE_TMP_DIR" php "$PIE_TMP_DIR/pie.phar" info --no-cache --with-php-config="$(command -v php-config)" "$1")"; then
 		printf 'Unable to detect the configure options of %s\n' "$1" >&2
 		return 1
 	fi
@@ -6066,7 +6076,7 @@ installPiePackage() {
 		installPiePackage_request="$installPiePackage_package"
 	fi
 	installPiePackage_configureOptions="$(getPieConfigureOptions "$installPiePackage_request")" || return 1
-	XDG_CONFIG_HOME="$PIE_TMP_DIR" php "$PIE_TMP_DIR/pie.phar" install \
+	COMPOSER_HOME="$PIE_COMPOSER_HOME" XDG_CONFIG_HOME="$PIE_TMP_DIR" php "$PIE_TMP_DIR/pie.phar" install \
 		--no-cache \
 		--no-build-tools-check \
 		--no-system-dependencies-check \
