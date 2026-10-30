@@ -196,7 +196,7 @@ getDockerImageName() {
 	if test -z "$(docker images -q "$getDockerImageName_imageName" 2>/dev/null)"; then
 		getDockerImageName_log="$(docker pull "$getDockerImageName_imageName" 2>&1 || true)"
 		if test -z "$(docker images -q "$getDockerImageName_imageName" 2>/dev/null)"; then
-			if test "${getDockerImageName_log#*manifest unknown}" != "$getDockerImageName_log" || test "${getDockerImageName_log#*manifest for * not found}" != "$getDockerImageName_log"; then
+			if test "${getDockerImageName_log#*manifest unknown}" != "$getDockerImageName_log" || test "${getDockerImageName_log#*manifest for * not found}" != "$getDockerImageName_log" || test "${getDockerImageName_log#*failed to resolve reference * not found}" != "$getDockerImageName_log"; then
 				return
 			fi
 			printf 'Failed to pull the Docker image %s:\n%s\n' "$getDockerImageName_imageName" "$getDockerImageName_log" >&2
@@ -394,6 +394,9 @@ testExtensionFor() {
 	testExtensionFor_out="$(mktemp)"
 	testExtensionFor_start=$(date +%s)
 	testExtensionFor_githubEnv=''
+	if test "${TEST_PIE:-0}" -eq 1 && test -n "${COMPOSER_AUTH:-}"; then
+		testExtensionFor_githubEnv='--env COMPOSER_AUTH'
+	fi
 	case "$1" in
 		mongodb | zstd)
 			if test -n "${COMPOSER_AUTH:-}"; then
