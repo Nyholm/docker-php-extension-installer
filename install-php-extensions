@@ -75,6 +75,10 @@ PIE_TMP_DIR=''
 # The Composer home directory used by PIE (set by configureInstaller)
 PIE_COMPOSER_HOME=''
 
+# Whether PIE may be used (0: no, 1: yes) and is actually used (set by configureInstaller)
+PIE_ENABLED=0
+USE_PIE=0
+
 StandWithUkraine() {
 	if test -t 1 && ! grep -Eq '^VERSION=.*jessie' /etc/os-release; then
 		printf '\e[37;44m#StandWith\e[30;43mUkraine\e[0m\n'
@@ -321,11 +325,16 @@ getPiePackageName() {
 }
 
 # Check if an argument is a PIE package name (vendor/package with an optional :version constraint)
+#
+# Local directories also look like vendor/package: processPHPModuleArgument must check them first.
 isPiePackageArgument() {
 	printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | grep -Eq '^[a-z0-9][a-z0-9_.-]*/[a-z0-9][a-z0-9_.-]*(:[^[:space:]]+)?$'
 }
 
 # Get a version comparable with compareVersions from a PIE version constraint
+#
+# This is only an approximation: for ranges (like ~6.0 or ^5) it returns the lower bound, not the version that will
+# be installed, and constraints using <, <=, ||, commas, spaces or wildcards are not supported.
 #
 # Arguments:
 #   $1: the version constraint (optional)
@@ -5872,6 +5881,27 @@ moduleMayUsePecl() {
 	return 0
 }
 
+# Check if the preinstalled librdkafka is too old for the PIE package of rdkafka (it needs at least 0.11.0)
+#
+# Return:
+#   0: true
+#   1: false (or librdkafka is not installed)
+isInstalledLibrdkafkaTooOldForPie() {
+	case "$DISTRO" in
+		alpine)
+			isInstalledLibrdkafkaTooOldForPie_package='librdkafka'
+			;;
+		debian)
+			isInstalledLibrdkafkaTooOldForPie_package='librdkafka1'
+			;;
+		*)
+			return 1
+			;;
+	esac
+	isInstalledLibrdkafkaTooOldForPie_version="$(getInstalledPackageVersion "$isInstalledLibrdkafkaTooOldForPie_package")"
+	test -n "$isInstalledLibrdkafkaTooOldForPie_version" && test $(compareVersions "$isInstalledLibrdkafkaTooOldForPie_version" '0.11.0') -lt 0
+}
+
 # Check if a module/helper may be installed using PIE
 #
 # Arguments:
@@ -5930,24 +5960,8 @@ moduleMayUsePie() {
 			;;
 			# END OF PIE UNSUPPORTED DISTROS (generated from data/pie-packages)
 	esac
-	if test "$1" = rdkafka; then
-		case "$DISTRO" in
-			alpine)
-				moduleMayUsePie_librdkafkaPackage='librdkafka'
-				;;
-			debian)
-				moduleMayUsePie_librdkafkaPackage='librdkafka1'
-				;;
-			*)
-				moduleMayUsePie_librdkafkaPackage=''
-				;;
-		esac
-		if test -n "$moduleMayUsePie_librdkafkaPackage"; then
-			moduleMayUsePie_librdkafkaVersion="$(getInstalledPackageVersion "$moduleMayUsePie_librdkafkaPackage")"
-			if test -n "$moduleMayUsePie_librdkafkaVersion" && test $(compareVersions "$moduleMayUsePie_librdkafkaVersion" '0.11.0') -lt 0; then
-				return 1
-			fi
-		fi
+	if test "$1" = rdkafka && isInstalledLibrdkafkaTooOldForPie; then
+		return 1
 	fi
 	moduleMayUsePie_version="$(getWantedPHPModuleVersion "$1")"
 	case "$moduleMayUsePie_version" in
@@ -6127,7 +6141,7 @@ configureInstaller() {
 		PIE_TMP_DIR="$(mktemp -p /tmp -d)"
 		if curl $IPE_CURL_FLAGS -sSLf "https://github.com/php/pie/releases/download/$IPE_PIE_VERSION/pie.phar" -o "$PIE_TMP_DIR/pie.phar"; then
 			if ! printf '%s  %s\n' "$IPE_PIE_SHA256" "$PIE_TMP_DIR/pie.phar" | sha256sum -c - >/dev/null 2>&1; then
-				printf 'PIE checksum verification failed\n' >&2
+				printf 'PIE checksum verification failed. When changing IPE_PIE_VERSION, also set IPE_PIE_SHA256 to the SHA-256 of the pie.phar of that version\n' >&2
 				rm -rf "$PIE_TMP_DIR"
 				PIE_TMP_DIR=''
 				exit 1
@@ -6275,6 +6289,7 @@ installPiePackage() {
 	installPiePackage_configureOptions="$(getPieConfigureOptions "$installPiePackage_request")" || return 1
 	COMPOSER_HOME="$PIE_COMPOSER_HOME" XDG_CONFIG_HOME="$PIE_TMP_DIR" php "$PIE_TMP_DIR/pie.phar" install \
 		--no-cache \
+		--no-interaction \
 		--no-build-tools-check \
 		--no-system-dependencies-check \
 		--skip-enable-extension \
@@ -6285,6 +6300,9 @@ installPiePackage() {
 }
 
 # Install a PIE package passed as vendor/package[:version]
+#
+# Differently from installPiePackage, PIE itself installs the build tools and the system packages it needs:
+# they are not tracked by us, so they won't be removed at the end of the installation.
 #
 # Arguments:
 #   $1: the PIE package request
